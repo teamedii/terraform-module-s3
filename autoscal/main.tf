@@ -1,13 +1,11 @@
 locals {
   tags = {
-    Project = var.project
+    Project  = var.project
     CreateBy = var.createdby
-    #Creation = timestamp()
-    #Environment = terraform.workspace
   }
 }
 provider "aws" {
-  region     = var.region
+  region = var.region
 }
 ###########################################
 #Create a launch configuration for autoscale
@@ -27,9 +25,9 @@ resource "aws_launch_configuration" "this" {
 resource "aws_autoscaling_policy" "mygroup_policy_up" {
   name                   = var.asp-up
   policy_type            = var.policy_type
-  scaling_adjustment     = 1                          # The number of instances by which to scale.
+  scaling_adjustment     = 1 # The number of instances by which to scale.
   adjustment_type        = var.adjustment_type
-  cooldown               = var.cooldown                         # The amount of time (seconds) after a scaling completes and the next scaling starts.
+  cooldown               = var.cooldown # The amount of time (seconds) after a scaling completes and the next scaling starts.
   autoscaling_group_name = aws_autoscaling_group.asg.name
 }
 ##########################################
@@ -39,11 +37,11 @@ resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_up" {
   alarm_name          = var.alarm_up_name # defining the name of AWS cloudwatch alarm
   comparison_operator = var.comparison_operator_up
   evaluation_periods  = 1
-  metric_name         = var.metric_name    
-  namespace           = var.namespace      
-  period              = var.period                 # After AWS Cloudwatch Alarm is triggered, it will wait for 60 seconds and then autoscales
+  metric_name         = var.metric_name
+  namespace           = var.namespace
+  period              = var.period # After AWS Cloudwatch Alarm is triggered, it will wait for 60 seconds and then autoscales
   statistic           = var.statistic
-  threshold           = 50                  # CPU Utilization threshold is set to 60 percent
+  threshold           = 50 # CPU Utilization threshold is set to 60 percent
   actions_enabled     = true
   alarm_actions = [
     aws_autoscaling_policy.mygroup_policy_up.arn
@@ -51,7 +49,7 @@ resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_up" {
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.asg.name
   }
-  tags = merge({"ResourceName" = "${var.project}-alarm-up"},local.tags)
+  tags = merge({ "ResourceName" = "${var.project}-alarm-up" }, local.tags)
 }
 
 ############################################
@@ -70,14 +68,14 @@ resource "aws_autoscaling_policy" "mygroup_policy_down" {
 # Creating Cloud metrics alarm to Scale Down
 ##############################################
 resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_down" {
-  alarm_name          = var.alarm_down_name                  # defining the name of AWS cloudwatch alarm
+  alarm_name          = var.alarm_down_name # defining the name of AWS cloudwatch alarm
   comparison_operator = var.comparison_operator_down
   evaluation_periods  = 1
-  metric_name         = var.metric_name     
-  namespace           = var.namespace        
-  period              = var.period                                  # After AWS Cloudwatch Alarm is triggered, it will wait for 30 seconds and then autoscales
+  metric_name         = var.metric_name
+  namespace           = var.namespace
+  period              = var.period # After AWS Cloudwatch Alarm is triggered, it will wait for 30 seconds and then autoscales
   statistic           = var.statistic
-  threshold           = 30                                    # CPU Utilization threshold is set to 10 percent
+  threshold           = 30 # CPU Utilization threshold is set to 10 percent
   actions_enabled     = true
   alarm_actions = [
     aws_autoscaling_policy.mygroup_policy_down.arn
@@ -85,7 +83,7 @@ resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_down" {
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.asg.name
   }
-  tags = merge({"ResourceName" = "${var.project}-alarm-Down"},local.tags)
+  tags = merge({ "ResourceName" = "${var.project}-alarm-Down" }, local.tags)
 }
 
 #############################
@@ -95,9 +93,9 @@ resource "aws_lb" "test" {
   name               = var.loadbalancer_name
   internal           = false
   load_balancer_type = var.loadbalancer_type
-  security_groups    =  var.security_group_ids
+  security_groups    = var.security_group_ids
   subnets            = var.subnet_ids
-  tags = merge({"ResourceName" = "${var.project}-alb"},local.tags)
+  tags               = merge({ "ResourceName" = "${var.project}-alb" }, local.tags)
 }
 
 ##############################
@@ -105,21 +103,21 @@ resource "aws_lb" "test" {
 ##############################
 
 resource "aws_lb_target_group" "this" {
-    name = var.target_group_name
-    target_type = var.target_type
-    protocol = var.protocol_type
-    port = 80
-    vpc_id = var.vpc_id
-    health_check {
-      protocol = var.protocol_type
-      path = var.path
-      healthy_threshold = 2
-      unhealthy_threshold = 3
-      timeout = 5
-      interval = 10
-      matcher = "200-299"
-    }
-    tags = merge({"ResourceName" = "${var.project}-tgp"},local.tags)
+  name        = var.target_group_name
+  target_type = var.target_type
+  protocol    = var.protocol_type
+  port        = 80
+  vpc_id      = var.vpc_id
+  health_check {
+    protocol            = var.protocol_type
+    path                = var.path
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 10
+    matcher             = "200-299"
+  }
+  tags = merge({ "ResourceName" = "${var.project}-tgp" }, local.tags)
 
 }
 ###############################
@@ -142,28 +140,28 @@ resource "aws_lb_listener" "front_end" {
 # Autoscale group creation
 #####################################
 resource "aws_autoscaling_group" "asg" {
-    name = var.asg_name
-    max_size                  = 5
-    min_size                  = 2
-    health_check_grace_period = 60
-    health_check_type         = "ELB"
-    force_delete              = true
-    launch_configuration      = aws_launch_configuration.this.name
-    vpc_zone_identifier       = var.subnet_ids
-    target_group_arns = [aws_lb_target_group.this.arn]
-    termination_policies = ["NewestInstance"]
-    enabled_metrics = [
-        "GroupMinSize",
-        "GroupMaxSize",
-        "GroupDesiredCapacity"
-    ]
-    metrics_granularity = "1Minute"
-    depends_on = [ aws_lb.test ]
-    tag {
-        key = "Name"
-        value= ("${var.project}-asg")
-        propagate_at_launch = true
-    }
+  name                      = var.asg_name
+  max_size                  = 5
+  min_size                  = 2
+  health_check_grace_period = 60
+  health_check_type         = "ELB"
+  force_delete              = true
+  launch_configuration      = aws_launch_configuration.this.name
+  vpc_zone_identifier       = var.subnet_ids
+  target_group_arns         = [aws_lb_target_group.this.arn]
+  termination_policies      = ["NewestInstance"]
+  enabled_metrics = [
+    "GroupMinSize",
+    "GroupMaxSize",
+    "GroupDesiredCapacity"
+  ]
+  metrics_granularity = "1Minute"
+  depends_on          = [aws_lb.test]
+  tag {
+    key                 = "Name"
+    value               = ("${var.project}-asg")
+    propagate_at_launch = true
+  }
 }
 
 ##############################################
